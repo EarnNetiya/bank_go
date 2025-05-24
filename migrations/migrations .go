@@ -38,7 +38,7 @@ func createAccounts() {
 	}
 
 	for i := 0; i < len(users); i++ {
-		generatedPassword := helpers.HashOnlyVulnerable([]byte(users[i].Username))
+		generatedPassword := helpers.HashAndSalt([]byte(users[i].Username))
 		user := User{Username: users[i].Username, Email: users[i].Email, Password: generatedPassword}
 		db.Create(&user)
 
@@ -52,7 +52,17 @@ func Migrate() {
 	User := &interfaces.User{}
 	Account := &interfaces.Account{}
 	db := helpers.ConnectDB()
-	db.AutoMigrate(&User{}, &Account{})
+	db.AutoMigrate(&User, &Account)
+	defer db.Close()
+
+	createAccounts()
+}
+
+func MigrateTransactions() {
+	Transactions := &interfaces.Transactions{}
+
+	db := helpers.ConnectDB()
+	db.AutoMigrate(&Transactions)
 	defer db.Close()
 
 	createAccounts()

@@ -29,3 +29,19 @@ type ResponseUser struct {
 	Email    string
 	Accounts []ResponseAccount
 }
+
+type Validation struct {
+	Value string
+	Valid string
+}
+
+type ErrResponse struct {
+	Message string
+}
+
+type Transactions struct {
+	gorm.Model
+	From uint
+	To uint
+	Amount int
+}
