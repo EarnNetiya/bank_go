@@ -1,5 +1,17 @@
 services:
- db:
+  bank:
+      container_name: bank_api
+      image: bank:1.0.0
+      build:
+        context: .
+        dockerfile: go.dockerfile
+      environment:
+        DATABASE_URL: 'DATABASE_URL=postgres://postgres:postgres@db:5432/gobank?sslmode=disable'
+      ports:
+        - '8080:8080'
+      depends_on:
+        - db
+  db:
     container_name: bank_db
     image: postgres:13
     environment:

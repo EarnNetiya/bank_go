@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"goproject-bank/helpers"
-	"goproject-bank/interfaces"
+	// "goproject-bank/interfaces"
+	"goproject-bank/useraccounts"
 	"goproject-bank/users"
 	"io/ioutil"
 	"log"
@@ -24,6 +25,13 @@ type Register struct {
 	Password string
 }
 
+type TransactionBody struct {
+	UserId uint
+	From   uint
+	To     uint
+	Amount int
+}
+
 type ErrResponse struct {
 	Message string
 }
@@ -40,7 +48,7 @@ func apiResponse(call map[string]interface{}, w http.ResponseWriter) {
 		resp := call
 		json.NewEncoder(w).Encode(resp)
 	} else {
-		resp := interfaces.ErrResponse{Message: "Wrong username or password"}
+		resp := call
 		json.NewEncoder(w).Encode(resp)
 	}
 }
@@ -79,11 +87,24 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	apiResponse(user, w)
 }
 
+func transaction(w http.ResponseWriter, r *http.Request) {
+	body := readBody(r)
+	auth := r.Header.Get("Authorization")
+	// Handle registration
+	var formattedBody TransactionBody
+	err := json.Unmarshal(body, &formattedBody)
+	helpers.HandleErr(err)
+	transaction := useraccounts.Transactions(formattedBody.UserId, formattedBody.From, formattedBody.To, formattedBody.Amount, auth)
+	// Prepare response
+	apiResponse(transaction, w)
+}
+
 func StartApi() {
 	router := mux.NewRouter()
 	router.Use(helpers.PanicHandler)
 	router.HandleFunc("/login", login).Methods("POST")
 	router.HandleFunc("/register", register).Methods("POST")
+	router.HandleFunc("/transaction", transaction).Methods("POST")
 	router.HandleFunc("/user/{id}", getUser).Methods("GET")
 	fmt.Println("Server started on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", router))
