@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"goproject-bank/helpers"
-	// "goproject-bank/interfaces"
+	"goproject-bank/transactions"
 	"goproject-bank/useraccounts"
 	"goproject-bank/users"
 	"io/ioutil"
@@ -87,7 +87,16 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	apiResponse(user, w)
 }
 
-func transaction(w http.ResponseWriter, r *http.Request) {
+func getMyTransactions(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userId := vars["userID"]
+	auth := r.Header.Get("Authorization")
+
+	transactions := transactions.GetMyTransactions(userId, auth)
+	apiResponse(transactions, w)
+}
+
+func Transactions(w http.ResponseWriter, r *http.Request) {
 	body := readBody(r)
 	auth := r.Header.Get("Authorization")
 	// Handle registration
@@ -104,8 +113,9 @@ func StartApi() {
 	router.Use(helpers.PanicHandler)
 	router.HandleFunc("/login", login).Methods("POST")
 	router.HandleFunc("/register", register).Methods("POST")
-	router.HandleFunc("/transaction", transaction).Methods("POST")
+	router.HandleFunc("/transactions", Transactions).Methods("POST")
 	router.HandleFunc("/user/{id}", getUser).Methods("GET")
+	router.HandleFunc("/transaction/{userID}", getMyTransactions).Methods("GET")
 	fmt.Println("Server started on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", router))
 }

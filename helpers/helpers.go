@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jinzhu/gorm"
+	// "github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,11 +30,6 @@ func HashAndSalt(pass []byte) string {
 	return string(hashed)
 }
 
-func ConnectDB() *gorm.DB {
-	db, err := gorm.Open("postgres", "host=127.0.0.1 port=5432 user=postgres dbname=gobank password=postgres sslmode=disable")
-	HandleErr(err)
-	return db
-}
 
 func Validation(values []interfaces.Validation) bool {
 	username := regexp.MustCompile(`^([A-Za-z0-9]{5,})+$`)

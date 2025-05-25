@@ -1,12 +1,13 @@
 package main
 
 import (
-	// "goproject-bank/api"
-	"goproject-bank/migrations"
+	"goproject-bank/api"
+	"goproject-bank/database"
 	// "goproject-bank/migrations"
 )
 
 func main() {
-	migrations.MigrateTransactions()
-	// api.StartApi()
+	// migrations.MigrateTransactions()
+	database.InitDatabase()
+	api.StartApi()
 }

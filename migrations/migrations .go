@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"goproject-bank/database"
 	"goproject-bank/helpers"
 	"goproject-bank/interfaces"
 
@@ -30,7 +31,6 @@ type Account struct {
 // }
 
 func createAccounts() {
-	db := helpers.ConnectDB()
 
 	users := &[2]interfaces.User{
 		{Username: "Martin", Email: "martin@martin.com"},
@@ -40,30 +40,18 @@ func createAccounts() {
 	for i := 0; i < len(users); i++ {
 		generatedPassword := helpers.HashAndSalt([]byte(users[i].Username))
 		user := User{Username: users[i].Username, Email: users[i].Email, Password: generatedPassword}
-		db.Create(&user)
+		database.DB.Create(&user)
 
 		accout := Account{Type: "Daily Account", Name: string(users[i].Username + "'s" + " accout"), Balance: uint(10000 * int(i+1)), UserID: user.ID}
-		db.Create(&accout)
+		database.DB.Create(&accout)
 	}
-	defer db.Close()
 }
 
 func Migrate() {
 	User := &interfaces.User{}
 	Account := &interfaces.Account{}
-	db := helpers.ConnectDB()
-	db.AutoMigrate(&User, &Account)
-	defer db.Close()
-
-	createAccounts()
-}
-
-func MigrateTransactions() {
 	Transactions := &interfaces.Transactions{}
-
-	db := helpers.ConnectDB()
-	db.AutoMigrate(&Transactions)
-	defer db.Close()
+	database.DB.AutoMigrate(&User, &Account, &Transactions)
 
 	createAccounts()
 }
