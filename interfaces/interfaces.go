@@ -52,3 +52,16 @@ type Transactions struct {
 	To uint
 	Amount int
 }
+
+type AdminOnly struct {
+	gorm.Model
+	Username string
+	Email    string
+	Password string
+}
+
+type ResponseAdmin struct {
+	ID       uint
+	Username string
+	Email    string
+}

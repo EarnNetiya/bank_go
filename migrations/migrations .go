@@ -24,12 +24,6 @@ type Account struct {
 	UserID  uint
 }
 
-// func connectDB() *gorm.DB {
-// 	db, err := gorm.Open("postgres", "host=127.0.0.1 port=5432 user=postgres dbname=gobank password=postgres sslmode=disable")
-// 	helpers.HandleErr(err)
-// 	return db
-// }
-
 func createAccounts() {
 
 	users := &[2]interfaces.User{
