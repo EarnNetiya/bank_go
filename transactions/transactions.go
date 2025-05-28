@@ -2,14 +2,28 @@ package transactions
 
 import (
 	// "goproject-bank/helpers"
+	"goproject-bank/blockchain"
 	"goproject-bank/database"
 	"goproject-bank/helpers"
 	"goproject-bank/interfaces"
+	"strconv"
+	"time"
 )
 
 func CreateTransaction(From uint, To uint, Amount int) {
 	transaction := &interfaces.Transactions{From: From, To: To, Amount: Amount}
 	database.DB.Create(transaction)
+
+	// Add the transaction to the blockchain
+	blockData := interfaces.BlockchainTransaction{
+		SenderAccount:   strconv.Itoa(int(From)),
+		ReceiverAccount: strconv.Itoa(int(To)),
+		Amount:          float64(Amount),
+		Timestamp:       time.Now().Format(time.RFC3339),
+	}
+
+	// Add block in blockchain
+	blockchain.Chain.AddBlock(blockData)
 }
 
 func GetTransactionsByAccount(id uint) []interfaces.ResponseTransaction {
@@ -27,7 +41,7 @@ func GetMyTransactions(id string, jwt string) map[string]interface{} {
 
 		transactions := []interfaces.ResponseTransaction{}
 
-		for i := 0; i< len(accounts); i++ {
+		for i := 0; i < len(accounts); i++ {
 			accTransactions := GetTransactionsByAccount(accounts[i].ID)
 			transactions = append(transactions, accTransactions...)
 		}
@@ -37,5 +51,5 @@ func GetMyTransactions(id string, jwt string) map[string]interface{} {
 	} else {
 		return map[string]interface{}{"message": "not valid values"}
 	}
-	
+
 }

@@ -15,6 +15,7 @@ type Account struct {
 	Name    string
 	Balance uint
 	UserID  uint
+	AccountNum string
 }
 
 type ResponseTransaction struct {
@@ -64,4 +65,11 @@ type ResponseAdmin struct {
 	ID       uint
 	Username string
 	Email    string
+}
+
+type BlockchainTransaction struct {
+	SenderAccount   string
+	ReceiverAccount string
+	Amount          float64
+	Timestamp       string
 }

@@ -93,7 +93,7 @@ func Register(username string, email string, pass string) map[string]interface{}
 		}
 		database.DB.Create(&user)
 		accountNum := generateRandomAccountNumber()
-		account := &interfaces.Account{Type: "Daily Account", Name: string(username + "'s" + " account"), Balance: 0, UserID: user.ID, AccountNumber: accountNum}
+		account := &interfaces.Account{Type: "Daily Account", Name: string(username + "'s" + " account"), Balance: 0, UserID: user.ID, AccountNum: accountNum}
 		database.DB.Create(&account)
 
 		accounts := []interfaces.ResponseAccount{}
