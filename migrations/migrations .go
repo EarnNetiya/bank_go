@@ -27,8 +27,8 @@ type Account struct {
 func createAccounts() {
 
 	users := &[2]interfaces.User{
-		{Username: "Martin", Email: "martin@martin.com"},
-		{Username: "Michael", Email: "michael!michael.com"},
+		// {Username: "Martin", Email: "martin@martin.com"},
+		// {Username: "Michael", Email: "michael!michael.com"},
 	}
 
 	for i := 0; i < len(users); i++ {
@@ -45,7 +45,8 @@ func Migrate() {
 	User := &interfaces.User{}
 	Account := &interfaces.Account{}
 	Transactions := &interfaces.Transactions{}
-	database.DB.AutoMigrate(&User, &Account, &Transactions)
+	Admin := &interfaces.AdminOnly{}
+	database.DB.AutoMigrate(&User, &Account, &Transactions, &Admin)
 
 	createAccounts()
 }

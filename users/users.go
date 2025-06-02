@@ -17,7 +17,7 @@ func prepareToken(user *interfaces.User) string {
 		"expiry": time.Now().Add(time.Minute * 60).Unix(),
 	}
 	jwtToken := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tokenContent)
-	token, err := jwtToken.SignedString([]byte("TokenPassword"))
+	token, err := jwtToken.SignedString([]byte("JWT_SECERET")) // Use a secure secret in production
 	helpers.HandleErr(err)
 
 	return token

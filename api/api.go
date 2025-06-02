@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 
+	// "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 )
 
@@ -120,6 +121,18 @@ func adminLogin(w http.ResponseWriter, r *http.Request) {
 	apiResponse(login, w)
 }
 
+func adminRegister(w http.ResponseWriter, r *http.Request) {
+	// Read body
+	body := readBody(r)
+	// Handle registration
+	var formattedBody Register
+	err := json.Unmarshal(body, &formattedBody)
+	helpers.HandleErr(err)
+	register := admin.Register(formattedBody.Username, formattedBody.Email, formattedBody.Password)
+	// Prepare response
+	apiResponse(register, w)
+}
+
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	admin_Id := vars["id"]
@@ -143,7 +156,7 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 	acc_Id := vars["id"]
 	auth := r.Header.Get("Authorization")
 
-	response := admin.DeleteAccout(acc_Id, auth)
+	response := admin.DeleteAccount(acc_Id, auth)
 	apiResponse(response, w)
 }
 
@@ -158,10 +171,11 @@ func StartApi() {
 	router.HandleFunc("/transaction/{userID}", getMyTransactions).Methods("GET")
 
 	// AdminOnly
-	router.HandleFunc("admin/login", adminLogin).Methods("POST")
-	router.HandleFunc("admin/user/{id}", getAllUsers).Methods("GET")
-	router.HandleFunc("delete/user/{user_Id}", deleteUser).Methods("DELETE")
-	router.HandleFunc("delete/account/{acc_Id}", deleteAccount).Methods("DELETE")
+	router.HandleFunc("/admin/login", adminLogin).Methods("POST")
+	router.HandleFunc("/admin/register", adminRegister).Methods("POST")
+	router.HandleFunc("/admin/user/{id}", getAllUsers).Methods("GET")
+	router.HandleFunc("/delete/user/{user_Id}", deleteUser).Methods("DELETE")
+	router.HandleFunc("/delete/account/{acc_Id}", deleteAccount).Methods("DELETE")
 	fmt.Println("Server started on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
