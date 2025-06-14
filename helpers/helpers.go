@@ -4,12 +4,13 @@ import (
 	// "crypto/md5"
 	// "encoding/hex"
 	"encoding/json"
+	"fmt"
 	"goproject-bank/interfaces"
 	"log"
 	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	// "github.com/jinzhu/gorm"
@@ -68,17 +69,44 @@ func PanicHandler(next http.Handler) http.Handler {
 	})
 }
 
-func ValidateToken(id string, jwtToken string) bool{
-	cleanJWT := strings.Replace(jwtToken, "Bearer ", "", -1)
-	tokenData := jwt.MapClaims{}
-	token, err := jwt.ParseWithClaims(cleanJWT, tokenData, func(token *jwt.Token) (interface{}, error) {
-		return []byte("TokenPassword"), nil
+func ValidateUserToken(id string, tokenString string) bool {
+	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+		tokenString = tokenString[7:]
+	}
+
+	claims := jwt.MapClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method")
+		}
+		return JwtSecret, nil
 	})
-	HandleErr(err)
-	var userId, _ =strconv.ParseFloat(id, 8)
-	if token.Valid && tokenData["user_id"] == userId {
-		return true
-	} else {
+	if err != nil {
+		log.Printf("Token parse error: %v", err)
 		return false
 	}
+
+	if !token.Valid {
+		log.Printf("Token is invalid")
+		return false
+	}
+
+	userID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		log.Printf("Invalid user ID: %v", err)
+		return false
+	}
+	userIDClaim, ok := claims["user_id"].(float64)
+	if !ok || uint64(userIDClaim) != userID {
+		log.Printf("User ID mismatch, expected: %d, got: %v", userID, userIDClaim)
+		return false
+	}
+	exp, ok := claims["exp"].(float64)
+	if !ok || int64(exp) <= time.Now().Unix() {
+		log.Printf("Token expired or invalid exp: %v, current time: %v", exp, time.Now().Unix())
+		return false
+	}
+
+	log.Printf("Token validated successfully for user ID: %d", userID)
+	return true
 }

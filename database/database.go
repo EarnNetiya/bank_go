@@ -2,8 +2,9 @@ package database
 
 import (
 	"goproject-bank/helpers"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
+
 	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 )
 
 var DB *gorm.DB

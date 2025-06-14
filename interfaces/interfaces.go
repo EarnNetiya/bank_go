@@ -15,7 +15,7 @@ type Account struct {
 	Name    string
 	Balance uint
 	UserID  uint
-	AccountNum string
+	AccountNumber string `gorm:"unique"`
 }
 
 type ResponseTransaction struct {

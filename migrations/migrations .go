@@ -4,6 +4,10 @@ import (
 	"goproject-bank/database"
 	"goproject-bank/helpers"
 	"goproject-bank/interfaces"
+	"goproject-bank/users"
+	// "math/rand"
+	// "strconv"
+	// "time"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
@@ -22,22 +26,48 @@ type Account struct {
 	Name    string
 	Balance uint
 	UserID  uint
+	AccountNumber string
 }
+
 
 func createAccounts() {
 
-	users := &[2]interfaces.User{
+	userList := []interfaces.User{
 		// {Username: "Martin", Email: "martin@martin.com"},
 		// {Username: "Michael", Email: "michael!michael.com"},
 	}
 
-	for i := 0; i < len(users); i++ {
-		generatedPassword := helpers.HashAndSalt([]byte(users[i].Username))
-		user := User{Username: users[i].Username, Email: users[i].Email, Password: generatedPassword}
-		database.DB.Create(&user)
+	for _, u := range userList {
+		generatedPassword := helpers.HashAndSalt([]byte(u.Username))
+		user := interfaces.User{
+			Username: u.Username,
+			Email:    u.Email,
+			Password: generatedPassword,
+		}
+		if err := database.DB.Create(&user).Error; err != nil {
+			panic(err)
+		}
 
-		accout := Account{Type: "Daily Account", Name: string(users[i].Username + "'s" + " accout"), Balance: uint(10000 * int(i+1)), UserID: user.ID}
-		database.DB.Create(&accout)
+		accountNum := users.GenerateRandomAccountNumber()
+
+		// Check for duplicates
+		var count int64
+		database.DB.Model(&interfaces.Account{}).Where("account_number = ?", accountNum).Count(&count)
+		for count > 0 {
+			accountNum = users.GenerateRandomAccountNumber()
+			database.DB.Model(&interfaces.Account{}).Where("account_number = ?", accountNum).Count(&count)
+		}
+
+		account := interfaces.Account{
+			Type:          "Daily Account",
+			Name:          u.Username + "'s account",
+			Balance:       uint(10000 * (len(userList) + 1)),
+			UserID:        user.ID,
+			AccountNumber: accountNum,
+		}
+		if err := database.DB.Create(&account).Error; err != nil {
+			panic(err)
+		}
 	}
 }
 

@@ -17,67 +17,71 @@ import (
 )
 
 type Login struct {
-	Username string
-	Password string
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type Register struct {
-	Username string
-	Email    string
-	Password string
+	Username      string `json:"username"`
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	InitialAmount int    `json:"initialAmount"` // ชื่อ field ตรงกับ JSON body
 }
 
 type TransactionBody struct {
-	UserId uint
-	From   uint
-	To     uint
-	Amount int
+	UserId uint `json:"userId"`
+	From   uint `json:"from"`
+	To     uint `json:"to"`
+	Amount int  `json:"amount"`
 }
 
-type ErrResponse struct {
-	Message string
-}
-
-func readBody(r *http.Request) ([]byte) {
+func readBody(r *http.Request) ([]byte, error) {
 	body, err := ioutil.ReadAll(r.Body)
-	helpers.HandleErr(err)
-
-	return body
+	return body, err
 }
 
 func apiResponse(call map[string]interface{}, w http.ResponseWriter) {
-	if call["message"] == "all is fine" {
-		resp := call
-		json.NewEncoder(w).Encode(resp)
-	} else {
-		resp := call
-		json.NewEncoder(w).Encode(resp)
-	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(call)
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
-	// Read body
-	body := readBody(r)
-	// Handle Login
+	body, err := readBody(r)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	var formattedBody Login
-	err := json.Unmarshal(body, &formattedBody)
-	helpers.HandleErr(err)
-	login := users.Login(formattedBody.Username, formattedBody.Password)
-	// Prepare response
-	apiResponse(login, w)
+	if err := json.Unmarshal(body, &formattedBody); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp := users.Login(formattedBody.Username, formattedBody.Password)
+	apiResponse(resp, w)
 }
 
-
 func register(w http.ResponseWriter, r *http.Request) {
-	// Read body
-	body := readBody(r)
-	// Handle registration
+	body, err := readBody(r)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	var formattedBody Register
-	err := json.Unmarshal(body, &formattedBody)
-	helpers.HandleErr(err)
-	register := users.Register(formattedBody.Username, formattedBody.Email, formattedBody.Password)
-	// Prepare response
-	apiResponse(register, w)
+	if err := json.Unmarshal(body, &formattedBody); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp := users.Register(
+		formattedBody.Username,
+		formattedBody.Email,
+		formattedBody.Password,
+		formattedBody.InitialAmount,
+	)
+	apiResponse(resp, w)
 }
 
 func getUser(w http.ResponseWriter, r *http.Request) {
@@ -85,8 +89,8 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	userId := vars["id"]
 	auth := r.Header.Get("Authorization")
 
-	user := users.GetUser(userId, auth)
-	apiResponse(user, w)
+	resp := users.GetUser(userId, auth)
+	apiResponse(resp, w)
 }
 
 func getMyTransactions(w http.ResponseWriter, r *http.Request) {
@@ -94,44 +98,64 @@ func getMyTransactions(w http.ResponseWriter, r *http.Request) {
 	userId := vars["userID"]
 	auth := r.Header.Get("Authorization")
 
-	transactions := transactions.GetMyTransactions(userId, auth)
-	apiResponse(transactions, w)
+	resp := transactions.GetMyTransactions(userId, auth)
+	apiResponse(resp, w)
 }
 
 func Transactions(w http.ResponseWriter, r *http.Request) {
-	body := readBody(r)
+	body, err := readBody(r)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
 	auth := r.Header.Get("Authorization")
-	// Handle registration
+
 	var formattedBody TransactionBody
-	err := json.Unmarshal(body, &formattedBody)
-	helpers.HandleErr(err)
-	transaction := useraccounts.Transactions(formattedBody.UserId, formattedBody.From, formattedBody.To, formattedBody.Amount, auth)
-	// Prepare response
-	apiResponse(transaction, w)
+	if err := json.Unmarshal(body, &formattedBody); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	resp := useraccounts.Transactions(formattedBody.UserId, formattedBody.From, formattedBody.To, formattedBody.Amount, auth)
+	apiResponse(resp, w)
 }
 
 // admin
 func adminLogin(w http.ResponseWriter, r *http.Request) {
-	body := readBody(r)
+	body, err := readBody(r)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
 	var formattedBody Login
-	err := json.Unmarshal(body, &formattedBody)
-	helpers.HandleErr(err)
+	err = json.Unmarshal(body, &formattedBody)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
 
 	login := admin.Login(formattedBody.Username, formattedBody.Password)
 	apiResponse(login, w)
 }
 
 func adminRegister(w http.ResponseWriter, r *http.Request) {
-	// Read body
-	body := readBody(r)
-	// Handle registration
+	body, err := readBody(r)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	var formattedBody Register
-	err := json.Unmarshal(body, &formattedBody)
-	helpers.HandleErr(err)
+	err = json.Unmarshal(body, &formattedBody)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
 	register := admin.Register(formattedBody.Username, formattedBody.Email, formattedBody.Password)
-	// Prepare response
 	apiResponse(register, w)
 }
+
 
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -144,7 +168,7 @@ func getAllUsers(w http.ResponseWriter, r *http.Request) {
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	user_Id := vars["id"]
+	user_Id := vars["user_Id"]
 	auth := r.Header.Get("Authorization")
 
 	response := admin.DeleteUser(user_Id, auth)
@@ -153,7 +177,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 
 func deleteAccount(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	acc_Id := vars["id"]
+	acc_Id := vars["acc_Id"]
 	auth := r.Header.Get("Authorization")
 
 	response := admin.DeleteAccount(acc_Id, auth)

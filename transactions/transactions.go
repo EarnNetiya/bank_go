@@ -6,26 +6,61 @@ import (
 	"goproject-bank/database"
 	"goproject-bank/helpers"
 	"goproject-bank/interfaces"
-	"strconv"
 	"time"
+
+	"github.com/jinzhu/gorm"
 )
 
-func CreateTransaction(From uint, To uint, Amount int) {
-	transaction := &interfaces.Transactions{From: From, To: To, Amount: Amount}
-	database.DB.Create(transaction)
+func CreateTransactionByAccountNumbers(fromAccountNumber string, toAccountNumber string, amount int) map[string]interface{} {
 
-	// Add the transaction to the blockchain
-	blockData := interfaces.BlockchainTransaction{
-		SenderAccount:   strconv.Itoa(int(From)),
-		ReceiverAccount: strconv.Itoa(int(To)),
-		Amount:          float64(Amount),
-		Timestamp:       time.Now().Format(time.RFC3339),
+	var fromAccount interfaces.Account
+	if err := database.DB.Where("account_number = ?", fromAccountNumber).First(&fromAccount).Error; err != nil {
+		return map[string]interface{}{"message": "From account not found"}
 	}
 
-	// Add block in blockchain
-	blockchain.Chain.AddBlock(blockData)
-}
+	var toAccount interfaces.Account
+	if err := database.DB.Where("account_number = ?", toAccountNumber).First(&toAccount).Error; err != nil {
+		return map[string]interface{}{"message": "To account not found"}
+	}
 
+	// Check balance
+	if fromAccount.Balance < uint(amount) {
+		return map[string]interface{}{"message": "Insufficient balance"}
+	}
+
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+
+		if err := tx.Model(&fromAccount).Update("balance", fromAccount.Balance-uint(amount)).Error; err != nil {
+			return err
+		}
+
+		// Add to toAccount
+		if err := tx.Model(&toAccount).Update("balance", toAccount.Balance+uint(amount)).Error; err != nil {
+			return err
+		}
+
+		transaction := &interfaces.Transactions{From: fromAccount.ID, To: toAccount.ID, Amount: amount}
+		if err := tx.Create(transaction).Error; err != nil {
+			return err
+		}
+
+		blockData := interfaces.BlockchainTransaction{
+			SenderAccount:   fromAccountNumber,
+			ReceiverAccount: toAccountNumber,
+			Amount:          float64(amount),
+			Timestamp:       time.Now().Format(time.RFC3339),
+		}
+		blockchain.Chain.AddBlock(blockData)
+
+		return nil
+	})
+
+	if err != nil {
+		return map[string]interface{}{"message": "Transaction failed", "error": err.Error()}
+	}
+
+	return map[string]interface{}{"message": "Transaction successful"}
+}
 func GetTransactionsByAccount(id uint) []interfaces.ResponseTransaction {
 	transactions := []interfaces.ResponseTransaction{}
 	database.DB.Table("transactions").Select("id, transactions.from, transactions.to, amount").Where(interfaces.Transactions{From: id}).Or(interfaces.Transactions{To: id}).Scan(&transactions)

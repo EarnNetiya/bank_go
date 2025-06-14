@@ -7,7 +7,6 @@ import (
 	"goproject-bank/helpers"
 )
 
-// AdminMiddleware ensures JWT is valid and user is admin
 func AdminMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokenString := r.Header.Get("Authorization")
@@ -21,18 +20,16 @@ func AdminMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// UserMiddleware ensures JWT is valid (admin OR user)
 func UserMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        tokenString := r.Header.Get("Authorization")
-        userID := r.Header.Get("User-ID")  
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenString := r.Header.Get("Authorization")
+		userID := r.Header.Get("User-ID")
 
-        if userID == "" || !helpers.ValidateToken(userID, tokenString) {
-            w.WriteHeader(http.StatusUnauthorized)
-            json.NewEncoder(w).Encode(map[string]string{"message": "User authorization required"})
-            return
-        }
-        next.ServeHTTP(w, r)
-    })
+		if userID == "" || !helpers.ValidateToken(userID, tokenString) {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"message": "User authorization required"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
-

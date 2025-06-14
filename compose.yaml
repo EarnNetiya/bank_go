@@ -5,8 +5,8 @@ services:
       build:
         context: .
         dockerfile: go.dockerfile
-      environment:
-        DATABASE_URL: 'host=localhost user=postgres password=postgres dbname=gobank port=5432 sslmode=disable'
+      env_file:
+      - .env
       ports:
         - '8080:8080'
       depends_on:

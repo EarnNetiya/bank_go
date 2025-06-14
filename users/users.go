@@ -10,119 +10,144 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func prepareToken(user *interfaces.User) string {
-	// Sign token 
+func prepareToken(user *interfaces.User) (string, error) {
+	// Sign token
 	tokenContent := jwt.MapClaims{
 		"user_id": user.ID,
-		"expiry": time.Now().Add(time.Minute * 60).Unix(),
+		"expiry":  time.Now().Add(time.Minute * 60).Unix(),
 	}
 	jwtToken := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tokenContent)
-	token, err := jwtToken.SignedString([]byte("JWT_SECERET")) // Use a secure secret in production
-	helpers.HandleErr(err)
-
-	return token
+	token, err := jwtToken.SignedString([]byte("JWT_SECRET")) // แก้ไขชื่อ secret ให้ถูกต้อง
+	if err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
-func prepareResponse(user *interfaces.User, accounts []interfaces.ResponseAccount, withToken bool) map[string]interface{} {
-		// Setup response
+func prepareResponse(user *interfaces.User, accounts []interfaces.ResponseAccount, withToken bool) (map[string]interface{}, error) {
+	// Setup response
 	responseUser := &interfaces.ResponseUser{
 		ID:       user.ID,
 		Username: user.Username,
 		Email:    user.Email,
 		Accounts: accounts,
 	}
-	
-	// Prepare response
-	var response = map[string]interface{}{"message": "all is fine"}
+
+	response := map[string]interface{}{"message": "all is fine"}
+
 	if withToken {
-		var token = prepareToken(user)
+		token, err := prepareToken(user)
+		if err != nil {
+			return nil, err
+		}
 		response["jwt"] = token
 	}
+
 	response["data"] = responseUser
-
-	return response
-
+	return response, nil
 }
 
 func Login(username string, pass string) map[string]interface{} {
-	// Add validation to login
-	valid := helpers.Validation(
+	// Validate input
+	if !helpers.Validation(
 		[]interfaces.Validation{
 			{Value: username, Valid: "username"},
 			{Value: pass, Valid: "password"},
-		})
-	if valid {
-		// Connect db
-		user := &interfaces.User{}
-		if database.DB.Where("username = ?", username).First(&user).RecordNotFound() {
-			return map[string]interface{}{"message": "User not found"}
-		}
-
-		// verify password
-		passErr := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pass))
-
-		if passErr == bcrypt.ErrMismatchedHashAndPassword && passErr != nil {
-			return map[string]interface{}{"message": "Wrong password"}
-		}
-
-		// Find account for the user
-		accounts := []interfaces.ResponseAccount{}
-		database.DB.Table("accounts").Select("id, name, balance").Where("user_id = ?", user.ID).Scan(&accounts)
-
-		var response = prepareResponse(user, accounts, true);
-		return response
-	} else {
+		},
+	) {
 		return map[string]interface{}{"message": "not valid values"}
 	}
+
+	user := &interfaces.User{}
+	result := database.DB.Where("username = ?", username).First(user)
+	if result.Error != nil {
+		return map[string]interface{}{"message": "User not found"}
+	}
+
+	// Verify password
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pass))
+	if err != nil {
+		return map[string]interface{}{"message": "Wrong password"}
+	}
+
+	// Get accounts
+	var accounts []interfaces.ResponseAccount
+	database.DB.Table("accounts").Select("id, name, balance").Where("user_id = ?", user.ID).Scan(&accounts)
+
+	response, err := prepareResponse(user, accounts, true)
+	if err != nil {
+		return map[string]interface{}{"message": "Failed to generate token"}
+	}
+	return response
 }
 
-func Register(username string, email string, pass string) map[string]interface{} {
-	// Add validation to register
-	valid := helpers.Validation(
+func Register(username string, email string, pass string, initialAmount int) map[string]interface{} {
+	// Validate input
+	if !helpers.Validation(
 		[]interfaces.Validation{
 			{Value: username, Valid: "username"},
 			{Value: email, Valid: "email"},
 			{Value: pass, Valid: "password"},
-		})
-	if valid {
-		// Connect db
-		// Create resgister login
-		generatedPassword := helpers.HashAndSalt([]byte(pass))
-		user := &interfaces.User{
-			Username: username, Email: email, Password: generatedPassword,
-		}
-		database.DB.Create(&user)
-		accountNum := generateRandomAccountNumber()
-		account := &interfaces.Account{Type: "Daily Account", Name: string(username + "'s" + " account"), Balance: 0, UserID: user.ID, AccountNum: accountNum}
-		database.DB.Create(&account)
-
-		accounts := []interfaces.ResponseAccount{}
-		respAccount := interfaces.ResponseAccount{ID: account.ID, Name: account.Name, Balance: int(account.Balance)}
-		accounts = append(accounts, respAccount)
-		var response = prepareResponse(user, accounts, true);
-
-		return response
-	} else {
+		},
+	) {
 		return map[string]interface{}{"message": "not valid values"}
 	}
+
+	hashedPass := helpers.HashAndSalt([]byte(pass))
+	user := &interfaces.User{
+		Username: username,
+		Email:    email,
+		Password: hashedPass,
+	}
+	if err := database.DB.Create(user).Error; err != nil {
+		return map[string]interface{}{"message": "Unable to create user"}
+	}
+
+	accountNum := GenerateRandomAccountNumber()
+	account := &interfaces.Account{
+		Type:          "Daily Account",
+		Name:          username + "'s account",
+		Balance:       uint(initialAmount),
+		UserID:        user.ID,
+		AccountNumber: accountNum,
+	}
+	if err := database.DB.Create(account).Error; err != nil {
+		return map[string]interface{}{"message": "Unable to create account"}
+	}
+
+	respAccount := interfaces.ResponseAccount{
+		ID:      account.ID,
+		Name:    account.Name,
+		Balance: int(account.Balance),
+	}
+	accounts := []interfaces.ResponseAccount{respAccount}
+
+	response, err := prepareResponse(user, accounts, true)
+	if err != nil {
+		return map[string]interface{}{"message": "Failed to generate token"}
+	}
+	return response
 }
 
 func GetUser(id string, jwt string) map[string]interface{} {
 	isValid := helpers.ValidateToken(id, jwt)
 
-	if isValid {
-		user := interfaces.User{}
-
-		result := database.DB.Where("id = ?", id).First(&user)
-		if result.Error != nil {
-			return map[string]interface{}{"message": "User not found"}
-		}
-		
-		accounts := []interfaces.ResponseAccount{}
-		database.DB.Table("accounts").Select("id, name, balance").Where("user_id = ?", user.ID).Scan(&accounts)
-		var response = prepareResponse(&user, accounts, false);
-		return response
-	} else {
+	if !isValid {
 		return map[string]interface{}{"message": "Invalid token"}
 	}
+
+	user := interfaces.User{}
+	result := database.DB.Where("id = ?", id).First(&user)
+	if result.Error != nil {
+		return map[string]interface{}{"message": "User not found"}
+	}
+
+	var accounts []interfaces.ResponseAccount
+	database.DB.Table("accounts").Select("id, name, balance").Where("user_id = ?", user.ID).Scan(&accounts)
+
+	response, err := prepareResponse(&user, accounts, false)
+	if err != nil {
+		return map[string]interface{}{"message": "Failed to prepare response"}
+	}
+	return response
 }

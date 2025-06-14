@@ -1,15 +1,12 @@
 package users
+
 import (
-    "math/rand"
-    "time"
+	"math/rand"
+	"strconv"
+	"time"
 )
 
-func generateRandomAccountNumber() string {
-    rand.Seed(time.Now().UnixNano())
-    var digits = "0123456789"
-    accountNum := make([]byte, 10)
-    for i := range accountNum {
-        accountNum[i] = digits[rand.Intn(len(digits))]
-    }
-    return string(accountNum)
+func GenerateRandomAccountNumber() string {
+	rand.Seed(time.Now().UnixNano())
+	return strconv.Itoa(1000000000 + rand.Intn(900000000)) // 10 
 }
