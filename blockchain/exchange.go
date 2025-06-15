@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"goproject-bank/interfaces"
 	"time"
@@ -98,4 +99,18 @@ func (chain *Blockchain) VerifyChain() bool {
 		}
 	}
 	return true
+}
+
+func (chain *Blockchain) GetBlockchainWithHashes() []interfaces.BlockWithHash {
+    var blockchainWithHashes []interfaces.BlockWithHash
+    for _, block := range chain.blocks {
+        blockWithHash := interfaces.BlockWithHash{
+            Hash:      hex.EncodeToString(block.Hash),
+            PrevHash:  hex.EncodeToString(block.PrevHash),
+            Data:      block.Data,
+            Timestamp: block.Timestamp,
+        }
+        blockchainWithHashes = append(blockchainWithHashes, blockWithHash)
+    }
+    return blockchainWithHashes
 }

@@ -74,8 +74,16 @@ type ResponseAdmin struct {
 }
 
 type BlockchainTransaction struct {
-	SenderAccount   string
-	ReceiverAccount string
-	Amount          float64
-	Timestamp       string
+    TransactionID   string  `json:"transaction_id"`
+    SenderAccount   string  `json:"sender_account"`
+    ReceiverAccount string  `json:"receiver_account"`
+    Amount          float64 `json:"amount"`
+    Timestamp       string  `json:"timestamp"`
+}
+
+type BlockWithHash struct {
+    Hash      string                 `json:"hash"`
+    PrevHash  string                 `json:"prev_hash"`
+    Data      BlockchainTransaction  `json:"data"`
+    Timestamp time.Time              `json:"timestamp"`
 }

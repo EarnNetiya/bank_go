@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"goproject-bank/admin"
+	"goproject-bank/blockchain"
+
 	// "goproject-bank/database"
 	"goproject-bank/helpers"
 	// "goproject-bank/interfaces"
@@ -12,6 +14,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+
 	// "strconv"
 
 	// "github.com/golang-jwt/jwt/v5"
@@ -201,15 +204,27 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 
 // blockchain Admin
 func getBlockchainTransactions(w http.ResponseWriter, r *http.Request) {
-	auth := r.Header.Get("Authorization")
-	log.Println("Authorization header:", auth)
-	if !helpers.ValidateAdminToken(auth) {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-    data := []string{"transaction1", "transaction2"}
-    json.NewEncoder(w).Encode(data)
+    auth := r.Header.Get("Authorization")
+    log.Println("Authorization header:", auth)
+    if !helpers.ValidateAdminToken(auth) {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Retrieve the blockchain with hashes
+    chainWithHashes := blockchain.Chain.GetBlockchainWithHashes()
+
+    // Prepare the response
+    response := map[string]interface{}{
+        "message": "Blockchain transactions with hashes",
+        "data":    chainWithHashes,
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(response); err != nil {
+        log.Println("Error encoding response:", err)
+        http.Error(w, "Internal server error", http.StatusInternalServerError)
+    }
 }
 
 func StartApi() {
