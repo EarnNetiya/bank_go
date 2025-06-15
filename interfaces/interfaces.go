@@ -1,6 +1,10 @@
 package interfaces
 
-import ("github.com/jinzhu/gorm")
+import (
+	"time"
+
+	"github.com/jinzhu/gorm"
+)
 
 type User struct {
 	gorm.Model
@@ -10,12 +14,14 @@ type User struct {
 }
 
 type Account struct {
-	gorm.Model
-	Type    string
-	Name    string
-	Balance uint
-	UserID  uint
-	AccountNumber string `gorm:"unique"`
+    ID            uint      `gorm:"primaryKey"`
+    CreatedAt     time.Time
+    UpdatedAt     time.Time
+    UserID        uint      `gorm:"not null"`
+    AccountNumber string    `gorm:"unique;not null"`
+    Balance       uint      `gorm:"not null"`
+    Type          string
+    Name          string
 }
 
 type ResponseTransaction struct {

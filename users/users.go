@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -47,38 +48,38 @@ func prepareResponse(user *interfaces.User, accounts []interfaces.ResponseAccoun
 	return response, nil
 }
 
-func Login(username string, pass string) map[string]interface{} {
-	// Validate input
-	if !helpers.Validation(
-		[]interfaces.Validation{
-			{Value: username, Valid: "username"},
-			{Value: pass, Valid: "password"},
-		},
-	) {
-		return map[string]interface{}{"message": "not valid values"}
+var secretKey = []byte("supersecretkey") // ต้องตรงกับ helpers.secretKey
+
+func Login(username, password string) map[string]interface{} {
+	var user interfaces.User
+	if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil {
+		if gorm.IsRecordNotFoundError(err) {
+			return map[string]interface{}{"message": "User not found"}
+		}
+		return map[string]interface{}{"message": "Database error", "error": err.Error()}
 	}
 
-	user := &interfaces.User{}
-	result := database.DB.Where("username = ?", username).First(user)
-	if result.Error != nil {
-		return map[string]interface{}{"message": "User not found"}
-	}
-
-	// Verify password
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pass))
+	// ตรวจสอบรหัสผ่าน
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return map[string]interface{}{"message": "Wrong password"}
+		return map[string]interface{}{"message": "Invalid password"}
 	}
 
-	// Get accounts
-	var accounts []interfaces.ResponseAccount
-	database.DB.Table("accounts").Select("id, name, balance").Where("user_id = ?", user.ID).Scan(&accounts)
-
-	response, err := prepareResponse(user, accounts, true)
+	// สร้าง JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": user.ID,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+	})
+	tokenString, err := token.SignedString(secretKey)
 	if err != nil {
-		return map[string]interface{}{"message": "Failed to generate token"}
+		return map[string]interface{}{"message": "Failed to generate token", "error": err.Error()}
 	}
-	return response
+
+	return map[string]interface{}{
+		"message": "Login successful",
+		"token":   tokenString,
+		"user_id": user.ID,
+	}
 }
 
 func Register(username string, email string, pass string, initialAmount int) map[string]interface{} {

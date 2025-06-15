@@ -32,9 +32,9 @@ type Register struct {
 }
 
 type TransactionBody struct {
-	FromAccountNumber string `json:"from"`
-	ToAccountNumber   string `json:"to"`
-	Amount            int    `json:"amount"`
+    FromAccountNumber string `json:"fromAccountNumber"`
+    ToAccountNumber   string `json:"toAccountNumber"`
+    Amount            int    `json:"amount"`
 }
 
 
@@ -51,12 +51,14 @@ func apiResponse(call map[string]interface{}, w http.ResponseWriter) {
 func login(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r)
 	if err != nil {
+		log.Println("Failed to read request body:", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
 
 	var formattedBody Login
 	if err := json.Unmarshal(body, &formattedBody); err != nil {
+		log.Println("Invalid JSON:", err)
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -120,21 +122,19 @@ func Transactions(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    var req struct {
-        FromAccount string `json:"from_account"`
-        ToAccount   string `json:"to_account"`
-        Amount      int    `json:"amount"`
-    }
+    var req TransactionBody
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         log.Println("Invalid request body:", err)
         http.Error(w, "Invalid request body", http.StatusBadRequest)
         return
     }
+    log.Println("Received transaction request:", req) // Debug
 
-    result := transactions.CreateTransactionByAccountNumbers(req.FromAccount, req.ToAccount, req.Amount, userID)
+    result := transactions.CreateTransactionByAccountNumbers(req.FromAccountNumber, req.ToAccountNumber, req.Amount, userID)
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(result)
 }
+
 // admin
 func adminLogin(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r)
@@ -211,9 +211,6 @@ func getBlockchainTransactions(w http.ResponseWriter, r *http.Request) {
     data := []string{"transaction1", "transaction2"}
     json.NewEncoder(w).Encode(data)
 }
-
-
-
 
 func StartApi() {
 	router := mux.NewRouter()
