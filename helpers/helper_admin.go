@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -49,14 +50,14 @@ func PanicHandlerAdmin(next http.Handler) http.Handler {
 }
 
 func ValidateAdminToken(tokenString string) bool {
+
+	if strings.HasPrefix(tokenString, "Bearer ") {
+		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+	}
+	
 	if tokenString == "" {
 		log.Println("Empty token")
 		return false
-	}
-
-	// ตัดคำว่า "Bearer " ถ้ามี (แต่กรณีนี้ไม่ต้องใช้แล้ว แค่เผื่อ)
-	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
-		tokenString = tokenString[7:]
 	}
 
 	log.Println("Raw token:", tokenString)

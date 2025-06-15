@@ -49,9 +49,9 @@ type ErrResponse struct {
 
 type Transactions struct {
 	gorm.Model
-	From uint
-	To uint
-	Amount int
+	FromAccountNumber string
+    ToAccountNumber   string
+    Amount            int
 }
 
 type AdminOnly struct {

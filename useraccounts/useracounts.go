@@ -1,10 +1,12 @@
 package useraccounts
 
 import (
+	"goproject-bank/blockchain"
 	"goproject-bank/database"
 	"goproject-bank/helpers"
 	"goproject-bank/interfaces"
 	"strconv"
+	"time"
 )
 
 func CreateAccount(userId uint, name string, initialAmount int) (interfaces.ResponseAccount, error) {
@@ -50,16 +52,16 @@ func getAccount(id uint) (*interfaces.Account, error) {
 	return account, nil
 }
 
-func Transactions(userId uint, from uint, to uint, amount int, jwt string) map[string]interface{} {
+func Transactions(userId uint, fromAccNumber string, toAccNumber string, amount int, jwt string) map[string]interface{} {
 	userIdString := strconv.Itoa(int(userId))
-	isValid := helpers.ValidateToken(userIdString, jwt)
+	isValid := helpers.ValidateUserToken(userIdString, jwt)
 
 	if !isValid {
 		return map[string]interface{}{"message": "Invalid token"}
 	}
 
-	fromAccount, errFrom := getAccount(from)
-	toAccount, errTo := getAccount(to)
+	fromAccount, errFrom := GetAccountByNumber(fromAccNumber)
+	toAccount, errTo := GetAccountByNumber(toAccNumber)
 
 	if errFrom != nil || errTo != nil {
 		return map[string]interface{}{"message": "Account not found"}
@@ -73,7 +75,6 @@ func Transactions(userId uint, from uint, to uint, amount int, jwt string) map[s
 		return map[string]interface{}{"message": "Not enough balance"}
 	}
 
-	// เริ่ม transaction
 	tx := database.DB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -81,19 +82,21 @@ func Transactions(userId uint, from uint, to uint, amount int, jwt string) map[s
 		}
 	}()
 
-	if err := tx.Model(&interfaces.Account{}).Where("id = ?", from).Update("balance", fromAccount.Balance-uint(amount)).Error; err != nil {
+	if err := tx.Model(&interfaces.Account{}).Where("id = ?", fromAccount.ID).
+		Update("balance", fromAccount.Balance-uint(amount)).Error; err != nil {
 		tx.Rollback()
 		return map[string]interface{}{"message": "Failed to update from account"}
 	}
 
-	if err := tx.Model(&interfaces.Account{}).Where("id = ?", to).Update("balance", toAccount.Balance+uint(amount)).Error; err != nil {
+	if err := tx.Model(&interfaces.Account{}).Where("id = ?", toAccount.ID).
+		Update("balance", toAccount.Balance+uint(amount)).Error; err != nil {
 		tx.Rollback()
 		return map[string]interface{}{"message": "Failed to update to account"}
 	}
 
 	transaction := interfaces.Transactions{
-		From:   from,
-		To:     to,
+		FromAccountNumber:   fromAccount.AccountNumber,
+		ToAccountNumber:     toAccount.AccountNumber,
 		Amount: amount,
 	}
 	if err := tx.Create(&transaction).Error; err != nil {
@@ -101,29 +104,27 @@ func Transactions(userId uint, from uint, to uint, amount int, jwt string) map[s
 		return map[string]interface{}{"message": "Failed to create transaction"}
 	}
 
+	blockData := interfaces.BlockchainTransaction{
+		SenderAccount:   fromAccount.AccountNumber,
+		ReceiverAccount: toAccount.AccountNumber,
+		Amount:          float64(amount),
+		Timestamp:       time.Now().Format(time.RFC3339),
+	}
+	blockchain.Chain.AddBlock(blockData)
+
 	if err := tx.Commit().Error; err != nil {
 		return map[string]interface{}{"message": "Transaction commit failed"}
 	}
 
-	updatedFrom, err := getAccount(from)
-	if err != nil {
-		return map[string]interface{}{"message": "Failed to get updated from account"}
-	}
-
-	updatedTo, err := getAccount(to)
-	if err != nil {
-		return map[string]interface{}{"message": "Failed to get updated to account"}
-	}
-
 	respFrom := interfaces.ResponseAccount{
-		ID:      updatedFrom.ID,
-		Name:    updatedFrom.Name,
-		Balance: int(updatedFrom.Balance),
+		ID:      fromAccount.ID,
+		Name:    fromAccount.Name,
+		Balance: int(fromAccount.Balance - uint(amount)),
 	}
 	respTo := interfaces.ResponseAccount{
-		ID:      updatedTo.ID,
-		Name:    updatedTo.Name,
-		Balance: int(updatedTo.Balance),
+		ID:      toAccount.ID,
+		Name:    toAccount.Name,
+		Balance: int(toAccount.Balance + uint(amount)),
 	}
 
 	return map[string]interface{}{
@@ -133,4 +134,14 @@ func Transactions(userId uint, from uint, to uint, amount int, jwt string) map[s
 			"to":   respTo,
 		},
 	}
+}
+
+
+func GetAccountByNumber(accountNumber string) (*interfaces.Account, error) {
+	account := &interfaces.Account{}
+	err := database.DB.Where("account_number = ?", accountNumber).First(account).Error
+	if err != nil {
+		return nil, err
+	}
+	return account, nil
 }

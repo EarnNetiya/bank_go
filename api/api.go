@@ -4,16 +4,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"goproject-bank/admin"
+	// "goproject-bank/database"
 	"goproject-bank/helpers"
+	// "goproject-bank/interfaces"
 	"goproject-bank/transactions"
-	"goproject-bank/useraccounts"
 	"goproject-bank/users"
 	"io/ioutil"
 	"log"
 	"net/http"
+	// "strconv"
 
 	// "github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
+	// "github.com/jinzhu/gorm"
 )
 
 type Login struct {
@@ -25,15 +28,15 @@ type Register struct {
 	Username      string `json:"username"`
 	Email         string `json:"email"`
 	Password      string `json:"password"`
-	InitialAmount int    `json:"initialAmount"` // ชื่อ field ตรงกับ JSON body
+	InitialAmount int    `json:"initialAmount"` 
 }
 
 type TransactionBody struct {
-	UserId uint `json:"userId"`
-	From   uint `json:"from"`
-	To     uint `json:"to"`
-	Amount int  `json:"amount"`
+	FromAccountNumber string `json:"from"`
+	ToAccountNumber   string `json:"to"`
+	Amount            int    `json:"amount"`
 }
+
 
 func readBody(r *http.Request) ([]byte, error) {
 	body, err := ioutil.ReadAll(r.Body)
@@ -103,23 +106,35 @@ func getMyTransactions(w http.ResponseWriter, r *http.Request) {
 }
 
 func Transactions(w http.ResponseWriter, r *http.Request) {
-	body, err := readBody(r)
-	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
-		return
-	}
-	auth := r.Header.Get("Authorization")
+    tokenString := helpers.ExtractTokenFromRequest(r)
+    if tokenString == "" {
+        log.Println("Missing token in request")
+        http.Error(w, "Missing token", http.StatusUnauthorized)
+        return
+    }
 
-	var formattedBody TransactionBody
-	if err := json.Unmarshal(body, &formattedBody); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
+    userID, err := helpers.ExtractUserID(tokenString)
+    if err != nil {
+        log.Println("Token validation failed:", err)
+        http.Error(w, "Invalid token: "+err.Error(), http.StatusUnauthorized)
+        return
+    }
 
-	resp := useraccounts.Transactions(formattedBody.UserId, formattedBody.From, formattedBody.To, formattedBody.Amount, auth)
-	apiResponse(resp, w)
+    var req struct {
+        FromAccount string `json:"from_account"`
+        ToAccount   string `json:"to_account"`
+        Amount      int    `json:"amount"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        log.Println("Invalid request body:", err)
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    result := transactions.CreateTransactionByAccountNumbers(req.FromAccount, req.ToAccount, req.Amount, userID)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(result)
 }
-
 // admin
 func adminLogin(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r)
@@ -184,6 +199,21 @@ func deleteAccount(w http.ResponseWriter, r *http.Request) {
 	apiResponse(response, w)
 }
 
+// blockchain Admin
+func getBlockchainTransactions(w http.ResponseWriter, r *http.Request) {
+	auth := r.Header.Get("Authorization")
+	log.Println("Authorization header:", auth)
+	if !helpers.ValidateAdminToken(auth) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+    data := []string{"transaction1", "transaction2"}
+    json.NewEncoder(w).Encode(data)
+}
+
+
+
 
 func StartApi() {
 	router := mux.NewRouter()
@@ -200,6 +230,7 @@ func StartApi() {
 	router.HandleFunc("/admin/user/{id}", getAllUsers).Methods("GET")
 	router.HandleFunc("/delete/user/{user_Id}", deleteUser).Methods("DELETE")
 	router.HandleFunc("/delete/account/{acc_Id}", deleteAccount).Methods("DELETE")
+	router.HandleFunc("/admin/blockchain/{id}", getBlockchainTransactions).Methods("GET")
 	fmt.Println("Server started on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", router))
 }

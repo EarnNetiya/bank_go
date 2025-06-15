@@ -4,13 +4,13 @@ import (
 	// "crypto/md5"
 	// "encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"goproject-bank/interfaces"
 	"log"
 	"net/http"
 	"regexp"
-	"strconv"
-	"time"
+
 
 	"github.com/golang-jwt/jwt/v5"
 	// "github.com/jinzhu/gorm"
@@ -69,44 +69,126 @@ func PanicHandler(next http.Handler) http.Handler {
 	})
 }
 
-func ValidateUserToken(id string, tokenString string) bool {
-	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
-		tokenString = tokenString[7:]
-	}
+func ValidateUserToken(userId string, tokenString string) bool {
+    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+        }
+        return secretKey, nil
+    })
 
-	claims := jwt.MapClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
+    if err != nil || !token.Valid {
+        log.Println("Token parse error:", err)
+        return false
+    }
+
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+        return false
+    }
+
+    uid := fmt.Sprintf("%v", claims["user_id"])
+    return uid == userId
+}
+
+var secretKey = []byte("JwtSecret")
+
+func ExtractUserID(tokenString string) (uint, error) {
+    if tokenString == "" {
+        return 0, errors.New("token is empty")
+    }
+
+    if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+        tokenString = tokenString[7:]
+    }
+
+    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+        }
+        return secretKey, nil
+    })
+    if err != nil || !token.Valid {
+        return 0, fmt.Errorf("invalid token: %w", err)
+    }
+
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+        return 0, errors.New("invalid claims")
+    }
+
+    userIDFloat, ok := claims["user_id"].(float64)
+    if !ok {
+        return 0, errors.New("user_id not found in token")
+    }
+
+    return uint(userIDFloat), nil
+}
+
+func ExtractUserIDFromToken(tokenString string) (string, error) {
+    if tokenString == "" {
+        return "", fmt.Errorf("token is empty")
+    }
+    token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+        return JwtSecret, nil 
+    })
+
+    if err != nil || !token.Valid {
+        return "", fmt.Errorf("invalid token")
+    }
+
+    claims, ok := token.Claims.(jwt.MapClaims)
+    if !ok {
+        return "", fmt.Errorf("invalid claims")
+    }
+
+    userID := fmt.Sprintf("%v", claims["user_id"])
+    if userID == "" {
+        return "", fmt.Errorf("user_id not found")
+    }
+
+    return userID, nil
+}
+
+func GetUserIDFromToken(tokenString string) uint {
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return JwtSecret, nil
 	})
-	if err != nil {
-		log.Printf("Token parse error: %v", err)
-		return false
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if userIDFloat, ok := claims["user_id"].(float64); ok {
+			return uint(userIDFloat)
+		}
 	}
 
-	if !token.Valid {
-		log.Printf("Token is invalid")
-		return false
+	log.Println("GetUserIDFromToken failed:", err)
+	return 0
+}
+
+func ExtractToken(r *http.Request) string {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return ""
+	}
+	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+		return authHeader[7:]
 	}
 
-	userID, err := strconv.ParseUint(id, 10, 64)
-	if err != nil {
-		log.Printf("Invalid user ID: %v", err)
-		return false
-	}
-	userIDClaim, ok := claims["user_id"].(float64)
-	if !ok || uint64(userIDClaim) != userID {
-		log.Printf("User ID mismatch, expected: %d, got: %v", userID, userIDClaim)
-		return false
-	}
-	exp, ok := claims["exp"].(float64)
-	if !ok || int64(exp) <= time.Now().Unix() {
-		log.Printf("Token expired or invalid exp: %v, current time: %v", exp, time.Now().Unix())
-		return false
-	}
+	return authHeader
+}
 
-	log.Printf("Token validated successfully for user ID: %d", userID)
-	return true
+func ExtractTokenFromRequest(r *http.Request) string {
+    authHeader := r.Header.Get("Authorization")
+    log.Println("Authorization header:", authHeader) // Debug
+    if authHeader == "" {
+        return ""
+    }
+    if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+        token := authHeader[7:]
+        log.Println("Extracted token:", token) // Debug
+        return token
+    }
+    log.Println("No Bearer prefix, using raw header:", authHeader) // Debug
+    return authHeader
 }
