@@ -5,6 +5,7 @@ import (
 	"goproject-bank/database"
 	"goproject-bank/helpers"
 	"goproject-bank/interfaces"
+	"log"
 	"strconv"
 	"time"
 
@@ -64,6 +65,7 @@ func prepareResponse(admin *interfaces.AdminOnly, users []interfaces.ResponseUse
 }
 
 func Login(username, pass string) map[string]interface{} {
+	
 	valid := helpers.ValidationAdmin([]interfaces.Validation{
 		{Value: username, Valid: "username"},
 		{Value: pass, Valid: "password"},
@@ -82,7 +84,17 @@ func Login(username, pass string) map[string]interface{} {
 		return map[string]interface{}{"message": "Wrong password"}
 	}
 
-	return prepareResponse(admin, nil, true)
+	claims := jwt.MapClaims{
+        "admin": true,
+        "verification_code": helpers.AdminVerificationCode, // Assuming this exists
+        "exp":   time.Now().Add(time.Hour * 24).Unix(),
+    }
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    tokenString, err := token.SignedString(helpers.JwtSecret)
+    if err != nil {
+        return map[string]interface{}{"message": "Failed to generate token"}
+    }
+    return map[string]interface{}{"message": "Login successful", "token": tokenString}
 }
 
 func Register(username, email, password string) map[string]interface{} {
@@ -134,23 +146,104 @@ func GetAllUser(id, auth string) map[string]interface{} {
 	return prepareResponse(&admin, users, false)
 }
 
-func DeleteUser(id, auth string) map[string]interface{} {
-    if !helpers.ValidateAdminToken(auth) {
-        return map[string]interface{}{"message": "Invalid token"}
-    }
+func GetUser(id, auth string) map[string]interface{} {
+	log.Println("GetUser: id =", id)
+	log.Println("Token =", auth)
 
-    fmt.Printf("DeleteUser called with id = %s\n", id) // เช็คค่า id ที่รับมา
+	if !helpers.ValidateAdminToken(auth) {
+		log.Println("Token failed validation")
+		return map[string]interface{}{"message": "Unauthorized", "status": 401}
+	}
 
-    idUint, err := strconv.ParseUint(id, 10, 64)
-    if err != nil {
-        return map[string]interface{}{"message": "Invalid user ID"}
-    }
+	idUint, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		log.Println("Invalid user ID format:", err)
+		return map[string]interface{}{"message": "Invalid user ID", "status": 400}
+	}
 
-    if database.DB.Where("id = ?", idUint).Delete(&interfaces.User{}).RowsAffected == 0 {
-        return map[string]interface{}{"message": "User not found or already deleted"}
-    }
-    return map[string]interface{}{"message": "User deleted successfully"}
+	user := interfaces.User{}
+	if database.DB.Where("id = ?", idUint).First(&user).RecordNotFound() {
+		log.Println("User not found")
+		return map[string]interface{}{"message": "User not found", "status": 404}
+	}
+
+	var accounts []interfaces.ResponseAccount
+	database.DB.Table("accounts").Select("id, account_number, name, balance").Where("user_id = ?", user.ID).Scan(&accounts)
+
+	log.Println("User retrieved successfully")
+	return map[string]interface{}{
+		"message": "User retrieved successfully",
+		"status":  200,
+		"data": map[string]interface{}{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"accounts": accounts,
+		},
+	}
 }
+
+func GetAccount(id, auth string) map[string]interface{} {
+	log.Println("GetAccount: id =", id)
+	log.Println("Token =", auth)
+
+	if !helpers.ValidateAdminToken(auth) {
+		log.Println("Token failed validation")
+		return map[string]interface{}{"message": "Unauthorized", "status": 401}
+	}
+
+	idUint, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		log.Println("Invalid account ID format:", err)
+		return map[string]interface{}{"message": "Invalid account ID", "status": 400}
+	}
+
+	account := interfaces.Account{}
+	if database.DB.Where("id = ?", idUint).First(&account).RecordNotFound() {
+		log.Println("Account not found")
+		return map[string]interface{}{"message": "Account not found", "status": 404}
+	}
+
+	log.Println("Account retrieved successfully")
+	return map[string]interface{}{
+		"message": "Account retrieved successfully",
+		"status":  200,
+		"data": map[string]interface{}{
+			"id":             account.ID,
+			"account_number": account.AccountNumber,
+			"name":           account.Name,
+			"balance":        account.Balance,
+			"user_id":        account.UserID,
+		},
+	}
+}
+
+
+func DeleteUser(id, auth string) map[string]interface{} {
+	log.Println("DeleteUser: id =", id)
+	log.Println("Token =", auth)
+
+	if !helpers.ValidateAdminToken(auth) {
+		log.Println("Token failed validation")
+		return map[string]interface{}{"message": "Unauthorized", "status": 401}
+	}
+
+	idUint, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		log.Println("Invalid user ID format:", err)
+		return map[string]interface{}{"message": "Invalid user ID"}
+	}
+
+	result := database.DB.Where("id = ?", idUint).Delete(&interfaces.User{})
+	if result.RowsAffected == 0 {
+		log.Println("No user found or already deleted")
+		return map[string]interface{}{"message": "User not found or already deleted"}
+	}
+
+	log.Println("User deleted successfully")
+	return map[string]interface{}{"message": "User deleted successfully"}
+}
+
 
 
 func DeleteAccount(id, auth string) map[string]interface{} {

@@ -14,10 +14,10 @@ type Blockchain struct {
 }
 
 type Block struct {
-	Hash     []byte
-	PrevHash []byte
-	Data     interfaces.BlockchainTransaction
-	Timestamp time.Time // Add timestamp to track block creation time
+	Hash     []byte 	 `json:"hash"`
+	PrevHash []byte		 `json:"prevHash"`
+	Data     interfaces.BlockchainTransaction	`json:"data"`
+	Timestamp time.Time 
 }
 
 func (b *Block) DeriveHash() {
@@ -86,14 +86,11 @@ func (chain *Blockchain) VerifyChain() bool {
 	for i := 1; i < len(chain.blocks); i++ {
 		currentBlock := chain.blocks[i]
 		previousBlock := chain.blocks[i-1]
-
-		// Verify current block's hash
+		currentHash := currentBlock.Hash
 		currentBlock.DeriveHash()
-		if !bytes.Equal(currentBlock.Hash, currentBlock.Hash) { // Self-check
+		if !bytes.Equal(currentBlock.Hash, currentHash) {
 			return false
 		}
-
-		// Verify link to previous block
 		if !bytes.Equal(currentBlock.PrevHash, previousBlock.Hash) {
 			return false
 		}

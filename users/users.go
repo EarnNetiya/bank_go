@@ -12,13 +12,13 @@ import (
 )
 
 func prepareToken(user *interfaces.User) (string, error) {
-	// Sign token
+
 	tokenContent := jwt.MapClaims{
 		"user_id": user.ID,
 		"expiry":  time.Now().Add(time.Minute * 60).Unix(),
 	}
 	jwtToken := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tokenContent)
-	token, err := jwtToken.SignedString([]byte("JWT_SECRET")) // แก้ไขชื่อ secret ให้ถูกต้อง
+	token, err := jwtToken.SignedString([]byte("supersecretkey")) 
 	if err != nil {
 		return "", err
 	}
@@ -48,7 +48,7 @@ func prepareResponse(user *interfaces.User, accounts []interfaces.ResponseAccoun
 	return response, nil
 }
 
-var secretKey = []byte("supersecretkey") // ต้องตรงกับ helpers.secretKey
+var secretKey = []byte("supersecretkey") 
 
 func Login(username, password string) map[string]interface{} {
 	var user interfaces.User
@@ -59,18 +59,16 @@ func Login(username, password string) map[string]interface{} {
 		return map[string]interface{}{"message": "Database error", "error": err.Error()}
 	}
 
-	// ตรวจสอบรหัสผ่าน
 	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
 		return map[string]interface{}{"message": "Invalid password"}
 	}
 
-	// สร้าง JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": user.ID,
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
-	tokenString, err := token.SignedString(secretKey)
+	tokenString, err := token.SignedString(helpers.JwtSecret)
 	if err != nil {
 		return map[string]interface{}{"message": "Failed to generate token", "error": err.Error()}
 	}
@@ -126,29 +124,6 @@ func Register(username string, email string, pass string, initialAmount int) map
 	response, err := prepareResponse(user, accounts, true)
 	if err != nil {
 		return map[string]interface{}{"message": "Failed to generate token"}
-	}
-	return response
-}
-
-func GetUser(id string, jwt string) map[string]interface{} {
-	isValid := helpers.ValidateToken(id, jwt)
-
-	if !isValid {
-		return map[string]interface{}{"message": "Invalid token"}
-	}
-
-	user := interfaces.User{}
-	result := database.DB.Where("id = ?", id).First(&user)
-	if result.Error != nil {
-		return map[string]interface{}{"message": "User not found"}
-	}
-
-	var accounts []interfaces.ResponseAccount
-	database.DB.Table("accounts").Select("id, name, balance").Where("user_id = ?", user.ID).Scan(&accounts)
-
-	response, err := prepareResponse(&user, accounts, false)
-	if err != nil {
-		return map[string]interface{}{"message": "Failed to prepare response"}
 	}
 	return response
 }

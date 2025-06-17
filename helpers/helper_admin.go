@@ -2,12 +2,10 @@ package helpers
 
 import (
 	"encoding/json"
-	"fmt"
 	"goproject-bank/interfaces"
 	"log"
 	"net/http"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -51,27 +49,17 @@ func PanicHandlerAdmin(next http.Handler) http.Handler {
 
 func ValidateAdminToken(tokenString string) bool {
 
-	if strings.HasPrefix(tokenString, "Bearer ") {
-		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+		tokenString = tokenString[7:]
 	}
 	
-	if tokenString == "" {
-		log.Println("Empty token")
-		return false
-	}
+    token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+        return JwtSecret, nil // ใช้ secret key เดียวกัน
+    })
 
-	log.Println("Raw token:", tokenString)
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
-		}
-		return JwtSecret, nil
-	})
-
-	if err != nil || !token.Valid {
-		log.Printf("Token is invalid or parse error: %v", err)
-		return false
-	}
+    if err != nil || !token.Valid {
+        return false
+    }
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
@@ -97,6 +85,7 @@ func ValidateAdminToken(tokenString string) bool {
 
 	return true
 }
+
 
 
 func ValidateToken(userID, tokenString string) bool {

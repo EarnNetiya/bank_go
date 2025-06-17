@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"goproject-bank/admin"
 	"goproject-bank/blockchain"
+	"goproject-bank/interfaces"
 
 	// "goproject-bank/database"
 	"goproject-bank/helpers"
@@ -92,23 +93,17 @@ func register(w http.ResponseWriter, r *http.Request) {
 	apiResponse(resp, w)
 }
 
-func getUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userId := vars["id"]
-	auth := r.Header.Get("Authorization")
-
-	resp := users.GetUser(userId, auth)
-	apiResponse(resp, w)
-}
-
 func getMyTransactions(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	userId := vars["userID"]
-	auth := r.Header.Get("Authorization")
+    vars := mux.Vars(r)
+    userID := vars["userID"]
+    token := helpers.ExtractTokenFromRequest(r)
 
-	resp := transactions.GetMyTransactions(userId, auth)
-	apiResponse(resp, w)
+    log.Println("Token:", token)
+
+    result := transactions.GetMyTransactions(userID, token)
+    json.NewEncoder(w).Encode(result)
 }
+
 
 func Transactions(w http.ResponseWriter, r *http.Request) {
     tokenString := helpers.ExtractTokenFromRequest(r)
@@ -174,57 +169,112 @@ func adminRegister(w http.ResponseWriter, r *http.Request) {
 	apiResponse(register, w)
 }
 
+func getAccount(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    accID := vars["id"]
+    auth := r.Header.Get("Authorization")
+
+    log.Println("Authorization Header:", auth)
+
+    resp := admin.GetAccount(accID, auth)
+    if status, ok := resp["status"].(int); ok {
+        w.WriteHeader(status)
+    } else {
+        w.WriteHeader(http.StatusOK)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(resp)
+}
+
+
+func getUser(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    userID := vars["id"]
+    auth := r.Header.Get("Authorization")
+
+    log.Println("Authorization Header:", auth)
+
+    resp := admin.GetUser(userID, auth)
+    if status, ok := resp["status"].(int); ok {
+        w.WriteHeader(status)
+    } else {
+        w.WriteHeader(http.StatusOK)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(resp)
+}
 
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	admin_Id := vars["id"]
 	auth := r.Header.Get("Authorization")
-
-	response := admin.GetAllUser(admin_Id, auth)
+	response := admin.GetAllUser("", auth) 
 	apiResponse(response, w)
 }
 
 func deleteUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	user_Id := vars["user_Id"]
-	auth := r.Header.Get("Authorization")
-
-	response := admin.DeleteUser(user_Id, auth)
-	apiResponse(response, w)
+    vars := mux.Vars(r)
+    userID := vars["user_Id"]
+    auth := r.Header.Get("Authorization")
+    log.Println("Received Authorization header:", auth)
+    response := admin.DeleteUser(userID, auth)
+    if status, ok := response["status"].(int); ok {
+        w.WriteHeader(status)
+    }
+    apiResponse(response, w)
 }
 
 func deleteAccount(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	acc_Id := vars["acc_Id"]
-	auth := r.Header.Get("Authorization")
-
-	response := admin.DeleteAccount(acc_Id, auth)
-	apiResponse(response, w)
+    vars := mux.Vars(r)
+    accID := vars["acc_Id"]
+    auth := r.Header.Get("Authorization")
+    response := admin.DeleteAccount(accID, auth)
+    if status, ok := response["status"].(int); ok {
+        w.WriteHeader(status)
+    } else {
+        w.WriteHeader(http.StatusOK)
+	}
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
 }
 
 // blockchain Admin
 func getBlockchainTransactions(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    userID := vars["id"]
+
     auth := r.Header.Get("Authorization")
-    log.Println("Authorization header:", auth)
     if !helpers.ValidateAdminToken(auth) {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
-
-    // Retrieve the blockchain with hashes
     chainWithHashes := blockchain.Chain.GetBlockchainWithHashes()
 
-    // Prepare the response
+    var userTransactions []interfaces.BlockWithHash
+    for _, block := range chainWithHashes {
+        if block.Data.SenderAccount == userID || block.Data.ReceiverAccount == userID {
+            userTransactions = append(userTransactions, block)
+        }
+    }
     response := map[string]interface{}{
-        "message": "Blockchain transactions with hashes",
+        "message": "Blockchain transactions for user " + userID,
+        "data":    userTransactions,
+    }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
+}
+
+func getAllBlockchainTransactions(w http.ResponseWriter, r *http.Request) {
+    // all blockchain 
+    chainWithHashes := blockchain.Chain.GetBlockchainWithHashes()
+
+    response := map[string]interface{}{
+        "message": "All blockchain transactions",
         "data":    chainWithHashes,
     }
 
     w.Header().Set("Content-Type", "application/json")
-    if err := json.NewEncoder(w).Encode(response); err != nil {
-        log.Println("Error encoding response:", err)
-        http.Error(w, "Internal server error", http.StatusInternalServerError)
-    }
+    json.NewEncoder(w).Encode(response)
 }
 
 func StartApi() {
@@ -233,16 +283,19 @@ func StartApi() {
 	router.HandleFunc("/login", login).Methods("POST")
 	router.HandleFunc("/register", register).Methods("POST")
 	router.HandleFunc("/transactions", Transactions).Methods("POST")
-	router.HandleFunc("/user/{id}", getUser).Methods("GET")
 	router.HandleFunc("/transaction/{userID}", getMyTransactions).Methods("GET")
 
 	// AdminOnly
 	router.HandleFunc("/admin/login", adminLogin).Methods("POST")
 	router.HandleFunc("/admin/register", adminRegister).Methods("POST")
-	router.HandleFunc("/admin/user/{id}", getAllUsers).Methods("GET")
+	router.HandleFunc("/user/{id}", getUser).Methods("GET")
+	router.HandleFunc("/account/{id}", getAccount).Methods("GET")
+	router.HandleFunc("/admin/users", getAllUsers).Methods("GET")
 	router.HandleFunc("/delete/user/{user_Id}", deleteUser).Methods("DELETE")
 	router.HandleFunc("/delete/account/{acc_Id}", deleteAccount).Methods("DELETE")
 	router.HandleFunc("/admin/blockchain/{id}", getBlockchainTransactions).Methods("GET")
+	router.HandleFunc("/admin/blockchain/transactions", getAllBlockchainTransactions).Methods("GET")
+	
 	fmt.Println("Server started on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", router))
 }

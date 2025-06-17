@@ -2,7 +2,6 @@ package helpers
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"goproject-bank/interfaces"
 	"log"
@@ -64,54 +63,34 @@ func PanicHandler(next http.Handler) http.Handler {
 }
 
 func ExtractTokenFromRequest(r *http.Request) string {
-	authHeader := r.Header.Get("Authorization")
-	log.Println("Authorization header:", authHeader) // ดีบัก
-	if authHeader == "" {
-		return ""
-	}
-	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-		token := authHeader[7:]
-		log.Println("Extracted token:", token) // ดีบัก
-		return token
-	}
-	log.Println("No Bearer prefix, using raw header:", authHeader) // ดีบัก
-	return authHeader
+    authHeader := r.Header.Get("Authorization")
+    if authHeader == "" {
+        return ""
+    }
+    if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+        return authHeader[7:]
+    }
+    return ""
 }
 
 func ExtractUserID(tokenString string) (uint, error) {
-	log.Println("Received token:", tokenString) // ดีบัก
-	if tokenString == "" {
-		return 0, errors.New("token is empty")
-	}
-
-	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
-		tokenString = tokenString[7:]
-		log.Println("Token after Bearer removal:", tokenString) // ดีบัก
-	}
-
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		log.Println("Token header:", token.Header) // ดีบัก
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return secretKey, nil
-	})
-	if err != nil || !token.Valid {
-		log.Println("Token parse error:", err) // ดีบัก
-		return 0, fmt.Errorf("invalid token: %w", err)
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return 0, errors.New("invalid claims")
-	}
-
-	userIDFloat, ok := claims["user_id"].(float64)
-	if !ok {
-		return 0, errors.New("user_id not found in token")
-	}
-
-	return uint(userIDFloat), nil
+    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            return nil, fmt.Errorf("unexpected signing method")
+        }
+        return secretKey, nil
+    })
+    if err != nil {
+        return 0, err
+    }
+    if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+        userID, ok := claims["user_id"].(float64) // หรือ uint ตามประเภทที่ใช้
+        if !ok {
+            return 0, fmt.Errorf("user_id not found in token")
+        }
+        return uint(userID), nil
+    }
+    return 0, fmt.Errorf("invalid token")
 }
 
 func ValidateUserToken(userId string, tokenString string) bool {

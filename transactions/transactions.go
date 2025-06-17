@@ -2,6 +2,8 @@ package transactions
 
 import (
 	// "goproject-bank/helpers"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"goproject-bank/blockchain"
 	"goproject-bank/database"
@@ -14,32 +16,41 @@ import (
 )
 
 func CreateTransactionByAccountNumbers(fromAccountNumber string, toAccountNumber string, amount int, userID uint) map[string]interface{} {
-    log.Println("Received fromAccountNumber:", fromAccountNumber, "Length:", len(fromAccountNumber)) // Debug
-    log.Println("Querying account with account_number:", fromAccountNumber)
+    db := database.DB
+    log.Println("Creating transaction:", fromAccountNumber, "->", toAccountNumber, "Amount:", amount)
+
+    // ตรวจสอบบัญชีต้นทาง
     var fromAccount interfaces.Account
-    if err := database.DB.Where("account_number = ?", fromAccountNumber).First(&fromAccount).Error; err != nil {
-        log.Println("Error finding from account:", err)
-        return map[string]interface{}{"message": "From account not found", "error": err.Error()}
-    }
-    log.Println("Found fromAccount:", fromAccount) // Debug
-
-    if fromAccount.UserID != userID {
-        log.Println("Unauthorized: UserID", userID, "does not own account", fromAccountNumber)
-        return map[string]interface{}{"message": "Unauthorized: You do not own this account"}
+    if err := db.Where("account_number = ? AND user_id = ?", fromAccountNumber, userID).First(&fromAccount).Error; err != nil {
+        log.Println("From account not found:", err)
+        return map[string]interface{}{"message": "From account not found"}
     }
 
+    // ตรวจสอบบัญชีปลายทาง
     var toAccount interfaces.Account
-    if err := database.DB.Where("account_number = ?", toAccountNumber).First(&toAccount).Error; err != nil {
-        log.Println("Error finding to account:", err)
-        return map[string]interface{}{"message": "To account not found", "error": err.Error()}
+    if err := db.Where("account_number = ?", toAccountNumber).First(&toAccount).Error; err != nil {
+        log.Println("To account not found:", err)
+        return map[string]interface{}{"message": "To account not found"}
     }
 
     if fromAccount.Balance < uint(amount) {
-        log.Println("Insufficient balance in account", fromAccountNumber, "Balance:", fromAccount.Balance, "Requested:", amount)
+        log.Println("Insufficient balance in account", fromAccountNumber)
         return map[string]interface{}{"message": "Insufficient balance"}
     }
 
-    err := database.DB.Transaction(func(tx *gorm.DB) error {
+    // คำนวณแฮชสำหรับธุรกรรม
+    transactionData := interfaces.BlockchainTransaction{
+        SenderAccount:   fromAccountNumber,
+        ReceiverAccount: toAccountNumber,
+        Amount:          float64(amount),
+        Timestamp:       time.Now().String(),
+    }
+    dataBytes, _ := json.Marshal(transactionData)
+    hash := sha256.Sum256(dataBytes)
+    transactionHash := fmt.Sprintf("%x", hash)
+
+    // บันทึกธุรกรรมในฐานข้อมูล
+    err := db.Transaction(func(tx *gorm.DB) error {
         if err := tx.Model(&fromAccount).Update("balance", fromAccount.Balance-uint(amount)).Error; err != nil {
             return err
         }
@@ -47,22 +58,20 @@ func CreateTransactionByAccountNumbers(fromAccountNumber string, toAccountNumber
             return err
         }
 
-        transaction := &interfaces.Transactions{
+        newTransaction := interfaces.Transactions{
             FromAccountNumber: fromAccountNumber,
             ToAccountNumber:   toAccountNumber,
             Amount:            amount,
+            Timestamp:         time.Now(),
+            Hash:              transactionHash,
         }
-        if err := tx.Create(transaction).Error; err != nil {
+        if err := tx.Create(&newTransaction).Error; err != nil {
             return err
         }
 
-        blockData := interfaces.BlockchainTransaction{
-            SenderAccount:   fromAccountNumber,
-            ReceiverAccount: toAccountNumber,
-            Amount:          float64(amount),
-            Timestamp:       time.Now().Format(time.RFC3339),
-        }
-        blockchain.Chain.AddBlock(blockData)
+        // add to blockchain
+        blockchain.Chain.AddTransaction(fromAccountNumber, toAccountNumber, float64(amount))
+
         return nil
     })
 
@@ -71,7 +80,7 @@ func CreateTransactionByAccountNumbers(fromAccountNumber string, toAccountNumber
         return map[string]interface{}{"message": "Transaction failed", "error": err.Error()}
     }
 
-    log.Println("Transaction successful: From", fromAccountNumber, "To", toAccountNumber, "Amount", amount)
+    log.Println("Transaction successful:", fromAccountNumber, "->", toAccountNumber, "Amount:", amount)
     return map[string]interface{}{"message": "Transaction successful"}
 }
 

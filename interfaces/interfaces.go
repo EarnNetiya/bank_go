@@ -58,6 +58,8 @@ type Transactions struct {
 	FromAccountNumber string
     ToAccountNumber   string
     Amount            int
+	Timestamp       time.Time `gorm:"not null"`
+    Hash            string    `gorm:"not null"`
 }
 
 type AdminOnly struct {
