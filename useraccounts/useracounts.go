@@ -9,11 +9,11 @@ import (
 	"time"
 )
 
-func CreateAccount(userId uint, name string, initialAmount int) (interfaces.ResponseAccount, error) {
+func CreateAccount(userId uint, name string, Balance int) (interfaces.ResponseAccount, error) {
 	account := interfaces.Account{
 		UserID:  userId,
 		Name:    name,
-		Balance: uint(initialAmount),
+		Balance: uint(Balance),
 	}
 	if err := database.DB.Create(&account).Error; err != nil {
 		return interfaces.ResponseAccount{}, err
@@ -24,32 +24,6 @@ func CreateAccount(userId uint, name string, initialAmount int) (interfaces.Resp
 		Name:    account.Name,
 		Balance: int(account.Balance),
 	}, nil
-}
-
-func updateAccount(id uint, amount int) (interfaces.ResponseAccount, error) {
-	account := interfaces.Account{}
-	if err := database.DB.Where("id = ?", id).First(&account).Error; err != nil {
-		return interfaces.ResponseAccount{}, err
-	}
-	account.Balance = uint(amount)
-	if err := database.DB.Save(&account).Error; err != nil {
-		return interfaces.ResponseAccount{}, err
-	}
-
-	return interfaces.ResponseAccount{
-		ID:      account.ID,
-		Name:    account.Name,
-		Balance: int(account.Balance),
-	}, nil
-}
-
-func getAccount(id uint) (*interfaces.Account, error) {
-	account := &interfaces.Account{}
-	err := database.DB.Where("id = ?", id).First(account).Error
-	if err != nil {
-		return nil, err
-	}
-	return account, nil
 }
 
 func Transactions(userId uint, fromAccNumber string, toAccNumber string, amount int, jwt string) map[string]interface{} {

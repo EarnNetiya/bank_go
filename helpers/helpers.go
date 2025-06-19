@@ -9,10 +9,11 @@ import (
 	"regexp"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var secretKey = []byte("supersecretkey") // คีย์ลับเดียวสำหรับทั้งโปรเจกต์
+var secretKey = []byte("secretKey") 
 
 func HandleErr(err error) {
 	if err != nil {
@@ -50,16 +51,18 @@ func Validation(values []interfaces.Validation) bool {
 }
 
 func PanicHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if error := recover(); error != nil {
-				log.Println("Panic occurred:", error)
-				resp := interfaces.ErrResponse{Message: "Internal server error"}
-				json.NewEncoder(w).Encode(resp)
-			}
-		}()
-		next.ServeHTTP(w, r)
-	})
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        log.Println("Request URL:", r.URL.Path) 
+        log.Println("Request Params:", mux.Vars(r)) 
+        defer func() {
+            if err := recover(); err != nil {
+                log.Println("Panic occurred:", err)
+                resp := interfaces.ErrResponse{Message: "Internal server error"}
+                json.NewEncoder(w).Encode(resp)
+            }
+        }()
+        next.ServeHTTP(w, r)
+    })
 }
 
 func ExtractTokenFromRequest(r *http.Request) string {
@@ -78,7 +81,7 @@ func ExtractUserID(tokenString string) (uint, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
             return nil, fmt.Errorf("unexpected signing method")
         }
-        return secretKey, nil
+        return JwtSecret, nil
     })
     if err != nil {
         return 0, err

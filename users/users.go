@@ -1,9 +1,11 @@
 package users
 
 import (
+
 	"goproject-bank/database"
 	"goproject-bank/helpers"
 	"goproject-bank/interfaces"
+
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -12,21 +14,19 @@ import (
 )
 
 func prepareToken(user *interfaces.User) (string, error) {
-
-	tokenContent := jwt.MapClaims{
-		"user_id": user.ID,
-		"expiry":  time.Now().Add(time.Minute * 60).Unix(),
-	}
-	jwtToken := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tokenContent)
-	token, err := jwtToken.SignedString([]byte("supersecretkey")) 
-	if err != nil {
-		return "", err
-	}
-	return token, nil
+    tokenContent := jwt.MapClaims{
+        "user_id": user.ID,
+        "exp":     time.Now().Add(time.Minute * 24).Unix(),
+    }
+    jwtToken := jwt.NewWithClaims(jwt.GetSigningMethod("HS256"), tokenContent)
+    token, err := jwtToken.SignedString(helpers.JwtSecret)
+    if err != nil {
+        return "", err
+    }
+    return token, nil
 }
 
 func prepareResponse(user *interfaces.User, accounts []interfaces.ResponseAccount, withToken bool) (map[string]interface{}, error) {
-	// Setup response
 	responseUser := &interfaces.ResponseUser{
 		ID:       user.ID,
 		Username: user.Username,
@@ -48,11 +48,9 @@ func prepareResponse(user *interfaces.User, accounts []interfaces.ResponseAccoun
 	return response, nil
 }
 
-var secretKey = []byte("supersecretkey") 
-
-func Login(username, password string) map[string]interface{} {
+func Login(email, password string) map[string]interface{} {
 	var user interfaces.User
-	if err := database.DB.Where("username = ?", username).First(&user).Error; err != nil {
+	if err := database.DB.Where("email = ?", email).First(&user).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
 			return map[string]interface{}{"message": "User not found"}
 		}
@@ -80,19 +78,28 @@ func Login(username, password string) map[string]interface{} {
 	}
 }
 
-func Register(username string, email string, pass string, initialAmount int) map[string]interface{} {
+func Register(email string, username string, pass string, Balance int) map[string]interface{} {
 	// Validate input
 	if !helpers.Validation(
 		[]interfaces.Validation{
-			{Value: username, Valid: "username"},
 			{Value: email, Valid: "email"},
+			{Value: username, Valid: "username"},
 			{Value: pass, Valid: "password"},
 		},
 	) {
 		return map[string]interface{}{"message": "not valid values"}
 	}
+	// Check if user already exists
+	var existingUser interfaces.User
+	err := database.DB.Where("email = ?", email).First(&existingUser).Error
+	if err == nil {
+		return map[string]interface{}{"message": "Email already exists"}
+	} else if err != nil && !gorm.IsRecordNotFoundError(err) {
+		return map[string]interface{}{"message": "Database error", "error": err.Error()}
+	}
 
 	hashedPass := helpers.HashAndSalt([]byte(pass))
+
 	user := &interfaces.User{
 		Username: username,
 		Email:    email,
@@ -106,7 +113,7 @@ func Register(username string, email string, pass string, initialAmount int) map
 	account := &interfaces.Account{
 		Type:          "Daily Account",
 		Name:          username + "'s account",
-		Balance:       uint(initialAmount),
+		Balance:       uint(Balance),
 		UserID:        user.ID,
 		AccountNumber: accountNum,
 	}

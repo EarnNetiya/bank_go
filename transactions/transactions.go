@@ -20,11 +20,14 @@ func CreateTransactionByAccountNumbers(fromAccountNumber string, toAccountNumber
     log.Println("Creating transaction:", fromAccountNumber, "->", toAccountNumber, "Amount:", amount)
 
     // ตรวจสอบบัญชีต้นทาง
+    log.Printf("Checking account: AccountNumber=%s, UserID=%d", fromAccountNumber, userID)
+    
     var fromAccount interfaces.Account
     if err := db.Where("account_number = ? AND user_id = ?", fromAccountNumber, userID).First(&fromAccount).Error; err != nil {
         log.Println("From account not found:", err)
         return map[string]interface{}{"message": "From account not found"}
     }
+    log.Printf("Found account: ID=%d, Balance=%d", fromAccount.ID, fromAccount.Balance)
 
     // ตรวจสอบบัญชีปลายทาง
     var toAccount interfaces.Account

@@ -11,6 +11,7 @@ type User struct {
 	Username string
 	Email    string
 	Password string
+	Accounts []Account `gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"` // One-to-many relationship with Account
 }
 
 type Account struct {
@@ -35,6 +36,7 @@ type ResponseAccount struct {
 	ID uint
 	Name string
 	Balance int
+	AccountNumber string
 }
 
 type ResponseUser struct {

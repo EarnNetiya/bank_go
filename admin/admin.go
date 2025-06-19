@@ -13,18 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func CreateAccount(account *interfaces.Account) (bool, string) {
-	var existingAccount interfaces.Account
-	if !database.DB.Where("account_number = ?", account.AccountNumber).First(&existingAccount).RecordNotFound() {
-		return false, "Account number already exists"
-	}
-
-	if err := database.DB.Create(account).Error; err != nil {
-		return false, "Failed to create account"
-	}
-
-	return true, ""
-}
 
 func CreateAdmin(admin *interfaces.AdminOnly) bool {
 	if err := database.DB.Create(admin).Error; err != nil {
@@ -130,21 +118,32 @@ func Register(username, email, password string) map[string]interface{} {
 	}
 }
 
-func GetAllUser(id, auth string) map[string]interface{} {
+func GetAllUsers(auth string) map[string]interface{} {
 	if !helpers.ValidateAdminToken(auth) {
-		return map[string]interface{}{"message": "Invalid token"}
-	}
-	idUint, _ := strconv.ParseUint(id, 10, 64)
-
-	admin := interfaces.AdminOnly{}
-	if database.DB.Where("id = ?", idUint).First(&admin).RecordNotFound() {
-		return map[string]interface{}{"message": "Admin not found"}
+		log.Println("Admin token validation failed for GetAllUsers.")
+		return map[string]interface{}{"message": "Unauthorized", "status": 401}
 	}
 
-	var users []interfaces.ResponseUser
-	database.DB.Table("users").Select("id, username, email").Scan(&users)
-	return prepareResponse(&admin, users, false)
+	var users []interfaces.User
+	result := database.DB.Preload("Accounts").Find(&users)
+
+	if result.Error != nil {
+		log.Printf("Error fetching users: %v", result.Error)
+		return map[string]interface{}{"message": "Error fetching users", "status": 500}
+	}
+
+	for i := range users {
+		users[i].Password = ""
+	}
+
+	response := map[string]interface{}{
+		"message": "Users retrieved successfully",
+		"users":   users,
+		"status":  200,
+	}
+	return response
 }
+
 
 func GetUser(id, auth string) map[string]interface{} {
 	log.Println("GetUser: id =", id)
