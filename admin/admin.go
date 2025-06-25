@@ -35,22 +35,22 @@ func prepareAdminToken(admin *interfaces.AdminOnly) string {
 }
 
 
-func prepareResponse(admin *interfaces.AdminOnly, users []interfaces.ResponseUser, withToken bool) map[string]interface{} {
-	responseUser := &interfaces.ResponseUser{
-		ID:       admin.ID,
-		Username: admin.Username,
-		Email:    admin.Email,
-	}
+// func prepareResponse(admin *interfaces.AdminOnly, users []interfaces.ResponseUser, withToken bool) map[string]interface{} {
+// 	responseUser := &interfaces.ResponseUser{
+// 		ID:       admin.ID,
+// 		Username: admin.Username,
+// 		Email:    admin.Email,
+// 	}
 
-	var response = map[string]interface{}{"message": "all is fine"}
-	if withToken {
-		token := prepareAdminToken(admin)
-		response["jwt"] = token
-	}
-	response["data"] = responseUser
+// 	var response = map[string]interface{}{"message": "all is fine"}
+// 	if withToken {
+// 		token := prepareAdminToken(admin)
+// 		response["jwt"] = token
+// 	}
+// 	response["data"] = responseUser
 
-	return response
-}
+// 	return response
+// }
 
 func Login(username, pass string) map[string]interface{} {
 	
